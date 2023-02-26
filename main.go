@@ -89,15 +89,26 @@ func main() {
 	}
 
 	promHandler := promhttp.Handler()
-	var handler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+	var metrics http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		log.WithField("remote", r.RemoteAddr).
 			Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path))
 		promHandler.ServeHTTP(w, r)
 	}
 
+	var health http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+		log.Info("Healthcheck status ok")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			log.WithError(err).Panic("healthcheck failed")
+		}
+	}
+
 	log.Info("serving metrics at " + config.Listen)
 
-	http.Handle("/metrics", handler)
+	http.Handle("/metrics", metrics)
+	http.Handle("/_health", health)
+
 	err = http.ListenAndServe(config.Listen, nil) //nolint:gosec
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.WithError(err).Panic("listenandserve")
